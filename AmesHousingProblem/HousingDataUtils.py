@@ -7,8 +7,12 @@
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.inspection import permutation_importance
+
 import seaborn as sns
 import matplotlib.pyplot as plt
+import shap
+
 import pandas as pd
 import numpy as np
 import random
@@ -106,7 +110,7 @@ def GetTrainTestData (CatEncoding = 'Label',     # Category Encoding: Label or O
                 combinedDF.drop ([feat], axis=1, inplace=True)
         print ('   Features after: ', combinedDF.shape[1])
         print ()
-   
+
     if MakeNewFeatures == True and DropUsedFeatures == True:
         # note only drop such features if new features were created 
         print ('Dropping features used in new features...')
@@ -163,9 +167,25 @@ def GetTrainTestData (CatEncoding = 'Label',     # Category Encoding: Label or O
     if scaler is not None:
         print ('Scaling data... using ', ScalingType)
         scaler.fit (combinedDF)
-        XTrain      = scaler.transform (XTrain)
-        XTestValues = scaler.transform (XTestValues)
 
+        # note that there are a few extra steps being done here so that
+        # 1) values are returned as a dataframe (not an ndarray), and 
+        # 2) no warnings are displayed since the code wasn't particularly 'pythonic'
+        colNames = combinedDF.columns.tolist()
+
+        scaledXTrain      = XTrain.copy()
+        scaledXTestValues = XTestValues.copy()
+        
+        scaledXTrainFeats      = scaledXTrain[colNames]
+        scaledXTestValuesFeats = scaledXTestValues[colNames]
+
+        scaledXTrainFeats      = scaler.transform (scaledXTrainFeats.values)
+        scaledXTestValuesFeats = scaler.transform (scaledXTestValuesFeats.values)
+
+        XTrain[colNames]      = scaledXTrainFeats
+        XTestValues = XTestValues.copy()
+        XTestValues[colNames] = scaledXTestValuesFeats
+  
     #
     # report some details...
     #
@@ -652,5 +672,30 @@ def MergeResult (IDs, YValues, takeExp, defaultValue):
 
     return (pd.DataFrame ({'Id':IDs,'SalePrice':YValues}), errMsg)
 
+
+#
+# FindFeatureImportance... using the permutation importance, the overall importance of all the features 
+#    is determined.  The two reasons why 'permutation importance' is used is because: 1) it can be used
+#    with all of the various models that were used; and 2) it can gauge both categorical and numeric
+#    features.  
+#
+def FindFeatureImportance (model, XData, YData, repetitions=5, scaler=1):
+
+    # first find the importance results...
+    importanceResults = permutation_importance (model, XData, YData, n_repeats=repetitions, random_state=0)
+
+    # and then clean them up a bit
+    overallResults = []
+
+    # note that for some models, the mean values sum to one.  So if there are a lot of features present,
+    # then each value can be rather small.  The scaler value is used to make dealing with the values a little
+    # less painfull
+
+    for i in range(len(XData.columns)):
+        overallResults.append ( [ XData.columns[i],                                # Feature
+                                  importanceResults.importances_mean[i] * scaler,  # Mean
+                                  importanceResults.importances_std[i]   ] )       # Standard deviation  
+
+    return overallResults
 
 

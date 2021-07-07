@@ -20,12 +20,15 @@ import itertools
 import HousingDataUtils
 
 
-FIND_OPTIMAL_PARAMS = False #True
-OUTPUT_COEFS        = True
+FIND_OPTIMAL_PARAMS = False 
 
 BASE_OUTPUT_NAME    = 'Results/TestPreds_LinReg'
 RESULTS_FILE        = 'Results_LinReg.csv'
-COEFS_FILE          = 'LinearReg_Coefs.csv'
+
+OUTPUT_FEAT_IMP_1   = True
+OUTPUT_FEAT_IMP_2   = True
+FEAT_IMP_FILE_1     = 'FeatureImportance_LinearReg_Coefs.csv'
+FEAT_IMP_FILE_2     = 'FeatureImportance_LinearReg_Permutations.csv'
 
 
 
@@ -143,7 +146,7 @@ def EvaluateModel (params):
     print ()
 
     # Output coefficients (betas) and intercept if necessary
-    if OUTPUT_COEFS:
+    if OUTPUT_FEAT_IMP_1:
         cols = XTrain.columns
         betas = model.coef_
         results = []
@@ -152,7 +155,7 @@ def EvaluateModel (params):
 
         results = sorted (results, reverse=True, key=lambda x: x[1])
 
-        coefsFile = open (COEFS_FILE, 'w')
+        coefsFile = open (FEAT_IMP_FILE_1, 'w')
         coefsFile.write ('Feature,Beta\n')
 
         print ('>>> Results')
@@ -166,12 +169,30 @@ def EvaluateModel (params):
 
         coefsFile.close ()
 
+    # Output feature importance is necessary...
+    if OUTPUT_FEAT_IMP_2:
+        print ('>>> Finding feature importance...')
+        featImportanceResults = HousingDataUtils.FindFeatureImportance (model, XTrain, YTrain, 20, 1)
+
+        featImpFile = open (FEAT_IMP_FILE_2, 'w')
+        featImpFile.write ('Feature,ImportanceMean,ImportanceStdDev\n')
+
+        for i in range(len(featImportanceResults)):
+            print (f'{featImportanceResults[i][0]:25} {(100 * featImportanceResults[i][1]):14.7f} {featImportanceResults[i][2]:14.7f}')
+            featImpFile.write (str(featImportanceResults[i][0]) + ',' + \
+                               str(featImportanceResults[i][1]) + ',' + \
+                               str(featImportanceResults[i][2]) + '\n')
+
+        featImpFile.close ()
+
+
     # Predict the model
-    print ('Predicting the model...')
+    print ('\nPredicting the model...')
     predYValues = model.predict (XTestValues)
 
     # output...
     outputFile = MakeOutputFileName (params)
+    print ('\nWriting to file... ', outputFile)
     results, errMsg = HousingDataUtils.MergeResult (XTestIDs, predYValues, params[3], YTrain.mean())
     results.to_csv (outputFile, index=False)
 
